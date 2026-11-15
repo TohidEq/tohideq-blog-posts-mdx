@@ -1,0 +1,105 @@
+---
+title: "MDX"
+date: "2023-01-01"
+tags: ["Mdx", "Markdown", "React", "Documentation", "Jsx"]
+---
+
+# What is MDX?
+
+**MDX** is a file format that lets you write **JSX inside Markdown**. It combines the simplicity of Markdown with the power of React components, so you can mix formatted text with interactive elements in a single file.
+
+> Think of it as Markdown + Components = MDX.
+
+## Why Use MDX?
+
+- **Write content faster** — use plain Markdown for text, headings, lists, and links.
+- **Embed components** — drop in React components anywhere in your document.
+- **Reusable** — build once, use everywhere (blogs, docs, READMEs, presentations).
+- **Great for docs** — ideal for sites like GitHub Docs, Next.js, Docusaurus, and Astro.
+
+## Basic Syntax
+
+Regular Markdown works as usual:
+
+```md
+# Heading
+Some **bold** text and a [link](https://example.com).
+```
+
+You can also use JSX directly:
+
+```mdx
+# Hello, MDX
+
+<MyComponent name="World" />
+
+This is **Markdown** with a component above.
+```
+
+## Using Components
+
+Import a component and render it inline:
+
+```mdx
+import Button from './Button'
+
+# Click Me
+
+<Button onClick={() => alert('Hi!')}>
+  Press me
+</Button>
+```
+
+## Expressions
+
+Curly braces let you embed JavaScript expressions:
+
+```mdx
+The answer is {2 + 2}.
+
+Today is {new Date().toLocaleDateString()}.
+```
+
+## Example File
+
+Here's a minimal `.mdx` file:
+
+```mdx
+import Note from './Note'
+
+# My First MDX Page
+
+Welcome to **MDX**! 🎉
+
+<Note type="tip">
+  You can mix Markdown and JSX freely.
+</Note>
+
+- Item one
+- Item two
+
+{/* A JSX comment */}
+```
+
+## Where MDX Is Used
+
+| Tool / Platform | How It Uses MDX |
+| --- | --- |
+| Next.js | Pages and content with `@next/mdx` |
+| Docusaurus | Docs and blog posts |
+| Astro | Content collections |
+| Gatsby | Pages and posts |
+| GitHub | Renders `.mdx` as plain Markdown in some views |
+
+## Tips
+
+1. **Keep it simple** — start with plain Markdown, add JSX only when needed.
+2. **Watch the blank lines** — leave a blank line between block elements and JSX.
+3. **Escape braces** — use `\{` and `\}` if you want literal curly braces.
+4. **Comments** — use `{/* ... */}` instead of `<!-- ... -->`.
+
+## Learn More
+
+- Official site: <https://mdxjs.com>
+- GitHub: <https://github.com/mdx-js/mdx>
+- Spec: <https://mdxjs.com/docs/what-is-mdx/>

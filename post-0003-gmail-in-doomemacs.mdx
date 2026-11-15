@@ -1,0 +1,594 @@
+---
+title: "Gmail in DoomEmacs"
+date: "2026-11-15"
+tags: ["Doom Emacs", "Gmail", "Emacs", "Linux", "Email Management"]
+---
+
+# Gmail in Doom Emacs using mbsync, mu4e, and App Passwords
+
+A personal note documenting how I set up multiple Gmail accounts in Doom Emacs using App Passwords (not OAuth2), mbsync, and mu4e.
+
+## Components
+
+- Doom Emacs
+- Gmail App Passwords (no OAuth2)
+- mbsync (isync) for local IMAP synchronization
+- mu4e
+
+## Read this first
+
+Remember these key notation conventions:
+
+- Press `c`: lowercase c.
+- Press `C`: uppercase C (`Shift` + `c`).
+- `C-c`: `Control` + `c`.
+- `M-x`: `Alt` + `x`.
+
+---
+
+## 0. Installing the required software
+
+### 0.0. Remove or back up existing Emacs and Doom directories
+
+> **Warning:** Only do this if you intend to replace your existing configuration. The commands below move existing directories to backup names.
+
+```sh
+mv ~/.emacs.d ~/.emacs.d-backup
+mv ~/.emacs ~/.emacs-backup
+mv ~/.doom.d ~/.doom.d-backup
+
+mv ~/.config/.emacs.d ~/.config/.emacs.d-backup
+mv ~/.config/.emacs ~/.config/.emacs-backup
+mv ~/.config/.doom.d ~/.config/.doom.d-backup
+```
+
+### 0.1. Install Doom Emacs
+
+```sh
+git clone --depth 1 https://github.com/doomemacs/doomemacs ~/.config/emacs
+~/.config/emacs/bin/doom install
+```
+
+Add `$HOME/.config/emacs/bin/` to your `PATH`.
+
+For Fish:
+
+```fish
+fish_add_path $HOME/.config/emacs/bin
+```
+
+For Bash, add this to `~/.bashrc`:
+
+```bash
+export PATH="$HOME/.config/emacs/bin:$PATH"
+```
+
+### 0.2. Install the required packages
+
+Install:
+
+- `mu`
+- `isync`
+- `msmtp`
+- `mbsync`
+
+On Arch Linux, using `yay`:
+
+```sh
+yay -S mu isync msmtp mbsync
+```
+
+That's it for the initial installation.
+
+---
+
+## 1. Setting up App Passwords
+
+An [App Password](https://support.google.com/accounts/answer/185833) lets an application access your Google Account without using your regular account password.
+
+Create App Passwords at [Google Account App Passwords](https://myaccount.google.com/apppasswords).
+
+### 1.1. Create an App Password for each Gmail account
+
+Create one App Password for each Gmail account you want to configure.
+
+For example:
+
+| Account | Gmail address | Example App Password |
+| --- | --- | --- |
+| Account 1 | `acc1@gmail.com` | `abcd efgh ijkl` |
+| Account 2 | `acc2@gmail.com` | `aaaa bbbb cccc dddd` |
+
+For each account:
+
+1. Go to a secure directory.
+2. Create a password file. For example, for Account 1, create `.mbsyncpass-acc1`.
+3. Put the account's App Password in that file.
+4. Encrypt it with GPG:
+
+   ```sh
+   gpg2 -c .mbsyncpass-acc1
+   ```
+
+   GPG will ask you for a new passphrase to encrypt the file. **Remember this passphrase.**
+
+5. GPG creates `.mbsyncpass-acc1.gpg`.
+6. Remove the original plaintext password file:
+
+   ```sh
+   rm .mbsyncpass-acc1
+   ```
+
+To decrypt it again when needed:
+
+```sh
+gpg2 -d .mbsyncpass-acc1.gpg > .mbsyncpass-acc1
+```
+
+Repeat these steps for every Gmail account, using a separate password file for each one.
+
+### 1.2. Create `authinfo.gpg`
+
+1. Open Doom Emacs.
+2. Create a new empty buffer with `SPC b N`.
+3. Add one line for each Gmail account:
+
+```text
+machine smtp.gmail.com port 587 login acc1@gmail.com password "abcd efgh ijkl"
+machine smtp.gmail.com port 587 login acc2@gmail.com password "aaaa bbbb cccc dddd"
+```
+
+4. Save the file using `SPC f s`.
+5. Enter this path:
+
+   ```text
+   ~/authinfo.gpg
+   ```
+
+6. Press Enter. Emacs will ask you for a passphrase to encrypt the file. **Remember it.**
+
+---
+
+## 2. Preparing Doom Emacs
+
+1. Open Doom Emacs.
+2. Press `SPC f p` to open your Doom configuration.
+3. Select `init.el` and press Enter.
+4. Find this line:
+
+   ```elisp
+   ;; (mu4e +org +gmail)
+   ```
+
+5. Uncomment it:
+
+   ```elisp
+   (mu4e +org +gmail)
+   ```
+
+6. Save the file with `SPC f s` and exit, or use `:wq`.
+
+---
+
+## 3. Configuring `.mbsyncrc`
+
+### 3.0. Prepare your mail directories
+
+Choose a directory where you want to store your emails.
+
+For example:
+
+```sh
+mkdir -p /home/me/here/there/mails/
+```
+
+### 3.1. Create the `.mbsyncrc` file
+
+Go to a secure configuration directory and create a file named `.mbsyncrc`.
+
+### 3.2. Add the account configuration
+
+Before using the configuration below, replace the placeholders:
+
+- Replace `[USER_A]` and `[USER_B]` with the username part of each Gmail address. For example, `acc1` and `acc2`.
+- Replace `path/to/[USER_A]-gmail/` and `path/to/[USER_B]-gmail/` with the actual Maildir paths for each account.
+- Replace the GPG password-file paths with the actual locations of your encrypted password files.
+
+For example:
+
+- `[USER_A]` becomes `acc1`.
+- `[[USER_A]]` becomes `[acc1]`.
+
+```text
+# mbsyncrc based on:
+# http://www.ict4g.net/adolfo/notes/2014/12/27/EmacsIMAP.html
+
+# ================================================================================
+# ACCOUNT A
+# ================================================================================
+
+IMAPAccount [USER_A]-gmail
+Host imap.gmail.com
+User [USER_A]@gmail.com
+PassCmd "gpg2 -q --for-your-eyes-only --no-tty -d path/to/.mbsyncpass-[USER_A].gpg"
+AuthMechs PLAIN
+TLSType IMAPS
+TLSVersions +1.2 +1.3
+CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+# Remote storage
+IMAPStore [USER_A]-gmail-remote
+Account [USER_A]-gmail
+
+# Local storage
+# Create the directory first, for example:
+# mkdir -p ~/Maildir/[USER_A]-gmail
+MaildirStore [USER_A]-gmail-local
+Path path/to/[USER_A]-gmail/
+Inbox path/to/[USER_A]-gmail/INBOX
+
+# Uncomment this only if you want to download all subfolders.
+# Synchronization will be slower.
+# SubFolders Verbatim
+
+# Inbox
+Channel [USER_A]-gmail-inbox
+Far :[USER_A]-gmail-remote:
+Near :[USER_A]-gmail-local:
+Patterns INBOX
+Create Both
+Expunge Both
+SyncState *
+MaxMessages 600
+ExpireUnread yes
+
+# Trash
+Channel [USER_A]-gmail-trash
+Far :[USER_A]-gmail-remote:"[Gmail]/Trash"
+Near :[USER_A]-gmail-local:"[[USER_A]].Trash"
+Create Both
+Expunge Both
+SyncState *
+MaxMessages 600
+ExpireUnread yes
+
+# Sent
+Channel [USER_A]-gmail-sent
+Far :[USER_A]-gmail-remote:"[Gmail]/Sent Mail"
+Near :[USER_A]-gmail-local:"[[USER_A]].Sent Mail"
+Create Both
+Expunge Both
+SyncState *
+MaxMessages 600
+ExpireUnread yes
+
+# All Mail (optional)
+# Channel [USER_A]-gmail-all
+# Far :[USER_A]-gmail-remote:"[Gmail]/All Mail"
+# Near :[USER_A]-gmail-local:"[[USER_A]].All Mail"
+# Create Both
+# Expunge Both
+# SyncState *
+# MaxMessages 600
+# ExpireUnread yes
+
+# Starred (optional)
+# Channel [USER_A]-gmail-starred
+# Far :[USER_A]-gmail-remote:"[Gmail]/Starred"
+# Near :[USER_A]-gmail-local:"[[USER_A]].Starred"
+# Create Both
+# Expunge Both
+# SyncState *
+# MaxMessages 600
+# ExpireUnread yes
+
+# Group all channels together
+Group [USER_A]-gmail
+Channel [USER_A]-gmail-inbox
+Channel [USER_A]-gmail-sent
+Channel [USER_A]-gmail-trash
+# Channel [USER_A]-gmail-all
+# Channel [USER_A]-gmail-starred
+
+# ================================================================================
+# ACCOUNT B
+# ================================================================================
+
+IMAPAccount [USER_B]-gmail
+Host imap.gmail.com
+User [USER_B]@gmail.com
+PassCmd "gpg2 -q --for-your-eyes-only --no-tty -d path/to/.mbsyncpass-[USER_B].gpg"
+AuthMechs PLAIN
+TLSType IMAPS
+TLSVersions +1.2 +1.3
+CertificateFile /etc/ssl/certs/ca-certificates.crt
+
+# Remote storage
+IMAPStore [USER_B]-gmail-remote
+Account [USER_B]-gmail
+
+# Local storage
+# Create the directory first, for example:
+# mkdir -p ~/Maildir/[USER_B]-gmail
+MaildirStore [USER_B]-gmail-local
+Path path/to/[USER_B]-gmail/
+Inbox path/to/[USER_B]-gmail/INBOX
+
+# Inbox
+Channel [USER_B]-gmail-inbox
+Far :[USER_B]-gmail-remote:
+Near :[USER_B]-gmail-local:
+Patterns INBOX
+Create Both
+Expunge Both
+SyncState *
+MaxMessages 600
+ExpireUnread yes
+
+# Trash
+Channel [USER_B]-gmail-trash
+Far :[USER_B]-gmail-remote:"[Gmail]/Trash"
+Near :[USER_B]-gmail-local:"[[USER_B]].Trash"
+Create Both
+Expunge Both
+SyncState *
+MaxMessages 600
+ExpireUnread yes
+
+# Sent
+Channel [USER_B]-gmail-sent
+Far :[USER_B]-gmail-remote:"[Gmail]/Sent Mail"
+Near :[USER_B]-gmail-local:"[[USER_B]].Sent Mail"
+Create Both
+Expunge Both
+SyncState *
+MaxMessages 600
+ExpireUnread yes
+
+# All Mail (optional)
+# Channel [USER_B]-gmail-all
+# Far :[USER_B]-gmail-remote:"[Gmail]/All Mail"
+# Near :[USER_B]-gmail-local:"[[USER_B]].All Mail"
+# Create Both
+# Expunge Both
+# SyncState *
+# MaxMessages 600
+# ExpireUnread yes
+
+# Starred (optional)
+# Channel [USER_B]-gmail-starred
+# Far :[USER_B]-gmail-remote:"[Gmail]/Starred"
+# Near :[USER_B]-gmail-local:"[[USER_B]].Starred"
+# Create Both
+# Expunge Both
+# SyncState *
+# MaxMessages 600
+# ExpireUnread yes
+
+# Group all channels together
+Group [USER_B]-gmail
+Channel [USER_B]-gmail-inbox
+Channel [USER_B]-gmail-sent
+Channel [USER_B]-gmail-trash
+# Channel [USER_B]-gmail-all
+# Channel [USER_B]-gmail-starred
+```
+
+You can uncomment any optional section you want. Just remember to uncomment its related channel lines in the corresponding group as well.
+
+---
+
+## 4. Configuring Doom Emacs
+
+### 4.0. Open your Doom configuration
+
+1. Open Doom Emacs.
+2. Press `SPC f o`.
+3. Select `config.el` and press Enter.
+
+### 4.1. Add the mu4e configuration
+
+Replace `~/path/to/mail/` and `~/path/to/.mbsyncrc` with your own paths. Also replace `account1` and `account2` with your actual account usernames and update the names and email addresses.
+
+```elisp
+;;; email.el -*- lexical-binding: t; -*-
+
+(use-package! mu4e
+  :commands mu4e
+  :config
+  ;; Maildir root (where mbsync puts emails)
+  (setq mu4e-root-maildir "~/path/to/mail")
+
+  ;; Use mbsync with your specific config
+  (setq mu4e-get-mail-command "mbsync -c ~/path/to/.mbsyncrc -a")
+
+  ;; Automatically pick the first context if multiple (optional)
+  (setq mu4e-context-policy 'pick-first)
+
+  ;; Define contexts for two accounts
+  (setq mu4e-contexts
+        `(,(make-mu4e-context
+             :name "Account1"
+             :match-func (lambda (msg)
+                           (when msg
+                             (string-prefix-p "/account1"
+                                              (mu4e-message-field msg :maildir))))
+             :vars '((user-mail-address      . "account1@gmail.com")
+                     (user-full-name        . "Account One")
+                     (mu4e-sent-folder      . "/account1/[account1].Sent")
+                     (mu4e-drafts-folder    . "/account1/[account1].Drafts")
+                     (mu4e-trash-folder     . "/account1/[account1].Trash")
+                     (mu4e-refile-folder    . "/account1/[account1].All Mail")
+                     (smtpmail-smtp-server  . "smtp.gmail.com")
+                     (smtpmail-smtp-service . 587)
+                     (smtpmail-stream-type  . starttls)))
+
+          ,(make-mu4e-context
+             :name "Account2"
+             :match-func (lambda (msg)
+                           (when msg
+                             (string-prefix-p "/account2"
+                                              (mu4e-message-field msg :maildir))))
+             :vars '((user-mail-address      . "account2@gmail.com")
+                     (user-full-name        . "Account Two")
+                     (mu4e-sent-folder      . "/account2/[account2].Sent")
+                     (mu4e-drafts-folder    . "/account2/[account2].Drafts")
+                     (mu4e-trash-folder     . "/account2/[account2].Trash")
+                     (mu4e-refile-folder    . "/account2/[account2].All Mail")
+                     (smtpmail-smtp-server  . "smtp.gmail.com")
+                     (smtpmail-smtp-service . 587)
+                     (smtpmail-stream-type  . starttls))))))
+
+(setq message-send-mail-function 'message-smtpmail-send-it
+      smtpmail-smtp-server "smtp.gmail.com"
+      smtpmail-smtp-service 587
+      smtpmail-stream-type 'starttls
+      smtpmail-auth-supported '(login plain)
+      smtpmail-debug-info nil
+      smtpmail-debug-verbose nil)
+
+;; Keybinding to open mu4e quickly
+(map! :leader
+      :desc "Open Mail (mu4e)"
+      "o m" #'mu4e)
+```
+
+### Tip: Keep the mail configuration in a separate file
+
+You can create another file in your Doom configuration directory, for example:
+
+```text
+~/.config/doom/here/there/mail.el
+```
+
+Then load it from `config.el`:
+
+```elisp
+(load! "here/there/mail") ;; No need to include ".el"
+```
+
+### 4.2. Apply the configuration
+
+Open a terminal and run:
+
+```sh
+doom sync
+```
+
+Or use the full path:
+
+```sh
+~/.config/emacs/bin/doom sync
+```
+
+---
+
+## 5. Downloading your emails
+
+### 5.0. Open a terminal
+
+### 5.1. Run mbsync
+
+The `-V` flag displays detailed information about the synchronization process. Remove it if you prefer less output.
+
+```sh
+mbsync -c ~/myworld/secret/emacsSecrets/mu4e/.mbsyncrc -a -V
+```
+
+- It will ask for the password for every account.
+- You can specify an account group, such as `account1-gmail`, instead of `-a` to sync only that account.
+
+### 5.2. Initialize and index your mail
+
+Replace the example path with your actual mail directory.
+
+```sh
+mu init --maildir /home/me/there/here/mail
+mu index --lazy-check
+```
+
+That's it.
+
+---
+
+## 6. Opening your emails in Emacs
+
+1. Open Doom Emacs.
+2. Press `SPC o m` to open the mail menu.
+3. Press `J` to open your emails.
+4. Press `q` to exit.
+
+---
+
+## 7. Sending emails
+
+1. Open Doom Emacs.
+2. Press `SPC o m` to open the mail menu.
+3. Press `;` to switch accounts, then select the account you want to use.
+4. Press `C` (uppercase) to compose a new email.
+5. Write your email.
+6. Send it by pressing `C-c C-c` (`Control` + `c`, then `Control` + `c`).
+
+Emacs will ask for the passphrase for your `~/.authinfo.gpg` file.
+
+---
+
+## 8. Synchronizing Gmail in Emacs
+
+1. Open Doom Emacs.
+2. Press `SPC o m` to open the mail menu.
+3. Press `u` and enter your password.
+4. Wait for synchronization to finish.
+5. Press `M-x` (`Alt` + `x`).
+6. Search for either `mu4e-update-index` or `mu4e-update-index-nonlazy`.
+7. Press Enter and wait for indexing to finish.
+
+---
+
+## Further reading
+
+- [mu4e for dummies](https://www.reddit.com/r/emacs/comments/bfsck6/mu4e_for_dummies/)
+
+## Community note: Using OAuth2 with oama
+
+A commenter, [sarg](https://gist.github.com/TohidEq/2c9cce7735c914d27b430a37c43229d8), shared an alternative approach using [oama](https://github.com/pdobsan/oama) for OAuth2 authentication.
+
+Example `~/.config/oama/config.yaml`:
+
+```yaml
+encryption:
+  tag: GPG
+  contents: '0xYOURGPGKEY'
+
+services:
+  google:
+    client_id: 'YOUR_CLIENT_ID'
+    client_secret: 'YOUR_CLIENT_SECRET'
+```
+
+For `~/.config/msmtp/config`, use:
+
+```text
+passwordeval oama access your.account@gmail.com
+```
+
+Example `~/.config/isyncrc`:
+
+```text
+IMAPStore gmail-remote
+    Host imap.gmail.com
+    User your.account@gmail.com
+    PassCmd "oama access your.account@gmail.com"
+    AuthMechs XOAUTH2
+    TLSType IMAPS
+    TLSVersions +1.3
+    CertificateFile /etc/ssl/certs/ca-certificates.crt
+```
+
+Authorize the account once to obtain a token:
+
+```sh
+oama authorize google your.account@gmail.com
+```
+
+After authorization, oama can refresh the token automatically.
